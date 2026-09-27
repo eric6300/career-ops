@@ -62,7 +62,32 @@ function normalizeRole(role) {
     .trim();
 }
 
+// Level/seniority qualifiers change what req a title refers to even when the
+// rest of the words overlap (e.g. "Android Developer" vs "Lead Android
+// Developer" vs "Senior Android Developer" are three different postings at
+// the same company, not the same one re-entered). Bail out of the fuzzy
+// match whenever the two titles carry a different set of these.
+const LEVEL_WORDS = ['junior', 'associate', 'mid', 'senior', 'sr', 'staff', 'lead', 'principal', 'head', 'director', 'manager', 'vp'];
+// Platform words are also short (ios = 3 chars) and would otherwise get
+// dropped by roleMatch's word-length filter below, letting e.g. "Sr. Staff
+// iOS Engineer" and "Sr. Staff Android Engineer" collapse into "duplicates"
+// on the shared "staff"/"engineer" words alone.
+const PLATFORM_WORDS = ['ios', 'android', 'web', 'mobile', 'frontend', 'backend', 'fullstack', 'flutter', 'react'];
+
+function qualifierWords(role, list) {
+  const words = normalizeRole(role).split(/\s+/);
+  return new Set(words.filter(w => list.includes(w)));
+}
+
+function sameSet(a, b) {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
 function roleMatch(a, b) {
+  if (!sameSet(qualifierWords(a, LEVEL_WORDS), qualifierWords(b, LEVEL_WORDS))) return false;
+  if (!sameSet(qualifierWords(a, PLATFORM_WORDS), qualifierWords(b, PLATFORM_WORDS))) return false;
   const wordsA = normalizeRole(a).split(/\s+/).filter(w => w.length > 3);
   const wordsB = normalizeRole(b).split(/\s+/).filter(w => w.length > 3);
   const overlap = wordsA.filter(w => wordsB.some(wb => wb.includes(w) || w.includes(wb)));

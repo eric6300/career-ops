@@ -67,7 +67,31 @@ function normalizeCompany(name) {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// Level/platform qualifiers (senior/staff/lead, ios/android/web...) change
+// what req a title refers to even when other words overlap — e.g. "Android
+// Developer" vs "Lead Android Developer" vs "Senior Android Developer" are
+// three different postings at the same company, not the same one re-sent.
+// These words are also short enough (ios = 3 chars, sr = 2) that the plain
+// length > 3 overlap filter below drops them, so check them separately.
+const LEVEL_WORDS = ['junior', 'associate', 'mid', 'senior', 'sr', 'staff', 'lead', 'principal', 'head', 'director', 'manager', 'vp'];
+const PLATFORM_WORDS = ['ios', 'android', 'web', 'mobile', 'frontend', 'backend', 'fullstack', 'flutter', 'react'];
+
+function qualifierWords(role, list) {
+  const words = role.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/);
+  return new Set(words.filter(w => list.includes(w)));
+}
+
+function sameQualifierSet(a, b, list) {
+  const setA = qualifierWords(a, list);
+  const setB = qualifierWords(b, list);
+  if (setA.size !== setB.size) return false;
+  for (const v of setA) if (!setB.has(v)) return false;
+  return true;
+}
+
 function roleFuzzyMatch(a, b) {
+  if (!sameQualifierSet(a, b, LEVEL_WORDS)) return false;
+  if (!sameQualifierSet(a, b, PLATFORM_WORDS)) return false;
   const wordsA = a.toLowerCase().split(/\s+/).filter(w => w.length > 3);
   const wordsB = b.toLowerCase().split(/\s+/).filter(w => w.length > 3);
   const overlap = wordsA.filter(w => wordsB.some(wb => wb.includes(w) || w.includes(wb)));
@@ -216,9 +240,13 @@ if (tsvFiles.length === 0) {
 }
 
 // Sort files numerically for deterministic processing
+// NOTE: only strip the LEADING digit run (the intended report num prefix,
+// e.g. "17-komoju.tsv" -> 17). Stripping all non-digits from the whole
+// filename would also pick up digits embedded later in the name (e.g.
+// "1-17live.tsv" -> "117" instead of 1), corrupting sort order.
 tsvFiles.sort((a, b) => {
-  const numA = parseInt(a.replace(/\D/g, '')) || 0;
-  const numB = parseInt(b.replace(/\D/g, '')) || 0;
+  const numA = parseInt(a.match(/^\d+/)?.[0] ?? '0', 10);
+  const numB = parseInt(b.match(/^\d+/)?.[0] ?? '0', 10);
   return numA - numB;
 });
 
