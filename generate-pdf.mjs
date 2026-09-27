@@ -13,6 +13,7 @@
 import { chromium } from 'playwright';
 import { resolve, dirname } from 'path';
 import { readFile } from 'fs/promises';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -129,7 +130,16 @@ async function generatePDF() {
     console.log(`🧹 ATS normalization: ${totalReplacements} replacements (${breakdown})`);
   }
 
-  const browser = await chromium.launch({ headless: true });
+  // Pre-provisioned sandboxes may ship a Chromium revision that doesn't match
+  // the installed `playwright` package's expected version. Point straight at
+  // the environment's chromium binary when present instead of letting
+  // Playwright resolve (and fail to find) its own pinned revision.
+  const localChromium = '/opt/pw-browsers/chromium';
+  const launchOptions = { headless: true };
+  if (existsSync(localChromium)) {
+    launchOptions.executablePath = localChromium;
+  }
+  const browser = await chromium.launch(launchOptions);
   try {
     const page = await browser.newPage();
 
